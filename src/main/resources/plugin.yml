@@ -1,3 +1,10 @@
 name: FreezeKill
 main: io.github.jdollar.FreezeKill
 version: 1.0
+
+commands:
+  freezekill:
+    description:
+    usage: /<command> [player] [timelimit]
+    permission: FreezeKill.freezekill
+    permission-usage: You don't have the permission <permission>
