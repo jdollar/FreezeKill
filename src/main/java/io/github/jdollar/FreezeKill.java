@@ -12,6 +12,8 @@ import org.bukkit.scoreboard.Score;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.ScoreboardManager;
 
+import java.util.UUID;
+
 public final class FreezeKill extends JavaPlugin {
 
     private static final String FREEZE_KILL_COMMAND = "freezekill";
@@ -37,25 +39,26 @@ public final class FreezeKill extends JavaPlugin {
             if (args[0].contains("[0-9]+")) {
                 //parse the user input from the command
                 //TODO: Make it safe for getting the player
-                Player unluckyVictim = Bukkit.getServer().getPlayer(args[0]);
+                UUID playerUuid = Bukkit.getServer().getPlayer(args[0]).getUniqueId();
                 int timeLimit = Integer.parseInt(args[1]);
 
                 if (timeLimit == 0) {
-                    //TODO: Kill that fool
+                    //They don't have any time to kill anything so just kill the player
+                    Bukkit.getPlayer(playerUuid).setHealth(0);
                 } else {
                     //Add player to the listener and setup their scoreboard
-                    playerListener.addFrozenPlayer(unluckyVictim, timeLimit);
-                    setupPlayerScoreboard(unluckyVictim, timeLimit);
+                    playerListener.addFrozenPlayer(playerUuid, timeLimit);
+                    setupPlayerScoreboard(playerUuid, timeLimit);
                 }
             }
         }
         return false;
     }
 
-    private void setupPlayerScoreboard(Player unluckyVictim, int timeLimit) {
+    private void setupPlayerScoreboard(UUID unluckyVictimUuid, int timeLimit) {
         //Add player to scoreboard with their time
         Objective playerTimeRow = scoreBoard.registerNewObjective("timeLimit", "dummy");
-        Score currentPlayerTime = playerTimeRow.getScore(unluckyVictim);
+        Score currentPlayerTime = playerTimeRow.getScore(unluckyVictimUuid.toString());
         currentPlayerTime.setScore(timeLimit);
     }
 }
