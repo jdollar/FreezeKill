@@ -5,19 +5,21 @@ import io.github.jdollar.task.KillCheckTask;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Monster;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.scoreboard.Objective;
-import org.bukkit.scoreboard.Score;
-import org.bukkit.scoreboard.Scoreboard;
-import org.bukkit.scoreboard.ScoreboardManager;
+import org.bukkit.scoreboard.*;
 
 import java.util.UUID;
 
 public final class FreezeKill extends JavaPlugin {
 
     private static final String FREEZE_KILL_COMMAND = "freezekill";
+    private static final String OBJECTIVE_TIME_LIMIT = "timeLimit";
 
     private PlayerListener playerListener;
     private ScoreboardManager scoreboardManager;
@@ -40,11 +42,8 @@ public final class FreezeKill extends JavaPlugin {
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        Bukkit.getServer().broadcastMessage(cmd.getName());
         if (cmd.getName().equalsIgnoreCase(FREEZE_KILL_COMMAND) && args.length == 2) {
-            Bukkit.getServer().broadcastMessage("is good command");
             if (args[1].matches("[0-9]+")) {
-                Bukkit.getServer().broadcastMessage("is good argument");
                 //parse the user input from the command
                 //TODO: Make it safe for getting the player
                 UUID playerUuid = Bukkit.getServer().getPlayer(args[0]).getUniqueId();
@@ -58,11 +57,21 @@ public final class FreezeKill extends JavaPlugin {
                     setupPlayerScoreboard(playerUuid, timeLimit);
 
                     //startup a task for every second or add player to currently running task
-                    if (runningKillCheck == null && !Bukkit.getScheduler().getPendingTasks().contains(runningKillCheck)) {
-                        killCheckTask = new KillCheckTask(this, new PlayerListener(this), playerUuid, timeLimit, scoreBoard);
+                    if (runningKillCheck == null || !Bukkit.getScheduler().isCurrentlyRunning(runningKillCheck.getTaskId())) {
+                        killCheckTask = new KillCheckTask(this, new PlayerListener(this), scoreBoard);
+                        killCheckTask.addFrozenPlayer(playerUuid, timeLimit);
+                        killCheckTask.setScoreBoard(scoreBoard);
                         runningKillCheck= killCheckTask.runTaskTimer(this, 0, 20);
                     } else {
                         killCheckTask.addFrozenPlayer(playerUuid, timeLimit);
+                        killCheckTask.setScoreBoard(scoreBoard);
+                    }
+
+                    LivingEntity playerEntity = (LivingEntity) Bukkit.getPlayer(playerUuid);
+                    for (Entity potentialMobs : playerEntity.getNearbyEntities(50, 50, 50)) {
+                        if (potentialMobs instanceof Monster) {
+                            ((Monster) potentialMobs).setTarget(playerEntity);
+                        }
                     }
                 }
 
@@ -73,9 +82,16 @@ public final class FreezeKill extends JavaPlugin {
     }
 
     private void setupPlayerScoreboard(UUID unluckyVictimUuid, int timeLimit) {
+        Objective playerTimeBoard = scoreBoard.getObjective(OBJECTIVE_TIME_LIMIT);
+
         //Add player to scoreboard with their time
-        Objective playerTimeRow = scoreBoard.registerNewObjective("timeLimit", "dummy");
-        Score currentPlayerTime = playerTimeRow.getScore(unluckyVictimUuid.toString());
-        currentPlayerTime.setScore(timeLimit);
+        if (playerTimeBoard == null) {
+            playerTimeBoard = scoreBoard.registerNewObjective("timeLimit", "dummy");
+            playerTimeBoard.setDisplaySlot(DisplaySlot.SIDEBAR);
+            playerTimeBoard.setDisplayName("Time Limit");
+        } else {
+            Score currentPlayerTime = playerTimeBoard.getScore(Bukkit.getPlayer(unluckyVictimUuid));
+            currentPlayerTime.setScore(timeLimit);
+        }
     }
 }

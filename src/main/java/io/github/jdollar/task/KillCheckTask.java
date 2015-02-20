@@ -7,7 +7,11 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitScheduler;
+import org.bukkit.scoreboard.Objective;
+import org.bukkit.scoreboard.Score;
 import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.ScoreboardManager;
 
 import java.util.*;
 
@@ -15,20 +19,13 @@ public class KillCheckTask extends BukkitRunnable {
 
     private final JavaPlugin freezeKill;
     private final PlayerListener playerListener;
-    private final Scoreboard scoreBoard;
+    private Scoreboard scoreBoard;
     private Map<UUID, Timer> frozenPlayers = new HashMap<UUID, Timer>();
 
-    public KillCheckTask(FreezeKill freezeKill, PlayerListener playerListener, UUID playerUuid, int timeLimit, Scoreboard scoreboard) {
+    public KillCheckTask(FreezeKill freezeKill, PlayerListener playerListener, Scoreboard scoreBoard) {
         this.freezeKill = freezeKill;
         this.playerListener = playerListener;
-        this.scoreBoard = scoreboard;
-
-        for (Player onlinePlayers : Bukkit.getServer().getOnlinePlayers()) {
-            onlinePlayers.setScoreboard(scoreboard);
-        }
-
-        this.frozenPlayers.put(playerUuid, new Timer(timeLimit));
-        this.playerListener.setFrozenPlayers(this.frozenPlayers);
+        this.scoreBoard = scoreBoard;
     }
 
     @Override
@@ -54,7 +51,13 @@ public class KillCheckTask extends BukkitRunnable {
         }
 
         if (frozenPlayers.isEmpty()) {
+            removeScoreboards();
             this.cancel();
+        } else {
+            updateScoreboard();
+            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                onlinePlayer.setScoreboard(scoreBoard);
+            }
         }
     }
 
@@ -64,6 +67,11 @@ public class KillCheckTask extends BukkitRunnable {
         }
 
         playerListener.setFrozenPlayers(frozenPlayers);
+
+        for (Player onlinePlayers : Bukkit.getServer().getOnlinePlayers()) {
+            Bukkit.getServer().broadcastMessage(onlinePlayers.getName());
+            onlinePlayers.setScoreboard(scoreBoard);
+        }
     }
 
     public void removeFrozenPlayer(UUID playerUuid) {
@@ -72,5 +80,24 @@ public class KillCheckTask extends BukkitRunnable {
         }
 
         playerListener.setFrozenPlayers(frozenPlayers);
+    }
+
+    private void updateScoreboard() {
+        Score score;
+        Objective objective = scoreBoard.getObjective("timeLimit");
+        for (Map.Entry<UUID, Timer> frozenPlayer : frozenPlayers.entrySet()) {
+            score = objective.getScore(Bukkit.getPlayer(frozenPlayer.getKey()));
+            score.setScore(frozenPlayer.getValue().getSeconds());
+        }
+    }
+
+    private void removeScoreboards() {
+        for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+            onlinePlayer.setScoreboard(Bukkit.getScoreboardManager().getNewScoreboard());
+        }
+    }
+
+    public void setScoreBoard(Scoreboard scoreBoard) {
+        this.scoreBoard = scoreBoard;
     }
 }
