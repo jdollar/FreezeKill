@@ -8,31 +8,27 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Monster;
+import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.*;
 
-import java.util.UUID;
+import java.util.*;
 
 public final class FreezeKill extends JavaPlugin {
 
     private static final String FREEZE_KILL_COMMAND = "freezekill";
-    private static final String OBJECTIVE_TIME_LIMIT = "timeLimit";
+    private static final String UNFREEZE_COMMAND = "unfreeze";
 
-    private PlayerListener playerListener;
     private ScoreboardManager scoreboardManager;
-    private Scoreboard scoreBoard;
 
     private BukkitTask runningKillCheck;
     private KillCheckTask killCheckTask;
 
     @Override
     public void onEnable() {
-        playerListener = new PlayerListener(this);
         scoreboardManager = Bukkit.getScoreboardManager();
-        scoreBoard = scoreboardManager.getNewScoreboard();
     }
 
     @Override
@@ -45,53 +41,53 @@ public final class FreezeKill extends JavaPlugin {
         if (cmd.getName().equalsIgnoreCase(FREEZE_KILL_COMMAND) && args.length == 2) {
             if (args[1].matches("[0-9]+")) {
                 //parse the user input from the command
-                //TODO: Make it safe for getting the player
-                UUID playerUuid = Bukkit.getServer().getPlayer(args[0]).getUniqueId();
+                Player argumentPlayer = Bukkit.getPlayer(args[0]);
                 int timeLimit = Integer.parseInt(args[1]);
+                if (this.getServer().getOnlinePlayers().contains(argumentPlayer)) {
+                    UUID playerUuid = argumentPlayer.getUniqueId();
 
-                if (timeLimit == 0) {
-                    //They don't have any time to kill anything so just kill the player
-                    Bukkit.getPlayer(playerUuid).setHealth(0);
-                } else {
-                    //Add player to the scoreboard
-                    setupPlayerScoreboard(playerUuid, timeLimit);
-
-                    //startup a task for every second or add player to currently running task
-                    if (runningKillCheck == null || !Bukkit.getScheduler().isCurrentlyRunning(runningKillCheck.getTaskId())) {
-                        killCheckTask = new KillCheckTask(this, new PlayerListener(this), scoreBoard);
-                        killCheckTask.addFrozenPlayer(playerUuid, timeLimit);
-                        killCheckTask.setScoreBoard(scoreBoard);
-                        runningKillCheck= killCheckTask.runTaskTimer(this, 0, 20);
+                    if (timeLimit == 0) {
+                        //They don't have any time to kill anything so just kill the player
+                        this.getServer().getPlayer(playerUuid).setHealth(0);
                     } else {
-                        killCheckTask.addFrozenPlayer(playerUuid, timeLimit);
-                        killCheckTask.setScoreBoard(scoreBoard);
-                    }
+                        //startup a task for every second or add player to currently running task
+                        if (runningKillCheck == null || !Bukkit.getScheduler().isCurrentlyRunning(runningKillCheck.getTaskId())) {
+                            killCheckTask = new KillCheckTask(this, new PlayerListener(this), scoreboardManager);
+                            killCheckTask.addFrozenPlayer(playerUuid, timeLimit);
+                            runningKillCheck= killCheckTask.runTaskTimer(this, 0, 20);
+                        } else {
+                            killCheckTask.addFrozenPlayer(playerUuid, timeLimit);
+                        }
 
-                    LivingEntity playerEntity = (LivingEntity) Bukkit.getPlayer(playerUuid);
-                    for (Entity potentialMobs : playerEntity.getNearbyEntities(50, 50, 50)) {
-                        if (potentialMobs instanceof Monster) {
-                            ((Monster) potentialMobs).setTarget(playerEntity);
+                        LivingEntity playerEntity = Bukkit.getPlayer(playerUuid);
+                        for (Entity potentialMobs : playerEntity.getNearbyEntities(50, 50, 50)) {
+                            if (potentialMobs instanceof Monster) {
+                                ((Monster) potentialMobs).setTarget(playerEntity);
+                            }
                         }
                     }
+                } else {
+                    sender.sendMessage("The player name is spelled incorrectly or the player is not online.");
                 }
 
                 return true;
             }
         }
-        return false;
-    }
 
-    private void setupPlayerScoreboard(UUID unluckyVictimUuid, int timeLimit) {
-        Objective playerTimeBoard = scoreBoard.getObjective(OBJECTIVE_TIME_LIMIT);
+        if (cmd.getName().equalsIgnoreCase(UNFREEZE_COMMAND) && args.length == 1) {
+            Player playerToSave = Bukkit.getPlayer(args[0]);
+            if (Bukkit.getOnlinePlayers().contains(playerToSave)
+                    && runningKillCheck != null
+                    && Bukkit.getScheduler().isCurrentlyRunning(runningKillCheck.getTaskId())) {
 
-        //Add player to scoreboard with their time
-        if (playerTimeBoard == null) {
-            playerTimeBoard = scoreBoard.registerNewObjective("timeLimit", "dummy");
-            playerTimeBoard.setDisplaySlot(DisplaySlot.SIDEBAR);
-            playerTimeBoard.setDisplayName("Time Limit");
-        } else {
-            Score currentPlayerTime = playerTimeBoard.getScore(Bukkit.getPlayer(unluckyVictimUuid));
-            currentPlayerTime.setScore(timeLimit);
+                killCheckTask.removeFrozenPlayer(playerToSave.getUniqueId());
+
+            } else {
+                sender.sendMessage("The player is not online or the player name was entered incorrectly. Please try again.");
+            }
+
+            return true;
         }
+        return false;
     }
 }
