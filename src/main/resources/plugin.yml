@@ -6,10 +6,10 @@ commands:
   freezekill:
     description: Freezes player in place and give them a time limit to kill a hostile mob before they will die
     usage: /<command> [player] [timelimit]
-    permission: FreezeKill.freezekill
+    permission: freezeKill.freezekill
     permission-usage: You don't have the permission <permission>
   unfreeze:
     description: Unfreeze a frozen player and stop them from dying if the time limit is not reached.
     usage: /<command> [player]
-    permission: FreezeKill.unfreeze
+    permission: freezeKill.unfreeze
     permission-usage: You don't have the permission <permission>

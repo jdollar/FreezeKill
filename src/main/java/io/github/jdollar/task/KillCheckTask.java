@@ -16,47 +16,55 @@ public class KillCheckTask extends BukkitRunnable {
     private final JavaPlugin freezeKill;
     private final PlayerListener playerListener;
     private final ScoreboardManager scoreboardManager;
+    private int taskId = 600;
+    private boolean cancelled = false;
 
     public KillCheckTask(FreezeKill freezeKill, PlayerListener playerListener, ScoreboardManager scoreboardManager) {
         this.freezeKill = freezeKill;
         this.playerListener = playerListener;
         this.scoreboardManager = scoreboardManager;
+
     }
 
     @Override
     public void run() {
-        if (playerListener != null) {
-            List<UUID> unluckyPlayers = new ArrayList<>();
-            Map<UUID, Timer> currentFrozenPlayers = playerListener.getFrozenPlayers();
+        if (!this.isCancelled()) {
+            if (playerListener != null) {
+                List<UUID> unluckyPlayers = new ArrayList<>();
+                Map<UUID, Timer> currentFrozenPlayers = playerListener.getFrozenPlayers();
 
-            for (Map.Entry<UUID, Timer> frozenPlayer : currentFrozenPlayers.entrySet()) {
-                if (frozenPlayer.getValue().getSeconds() == 0) {
-                    unluckyPlayers.add(frozenPlayer.getKey());
-                } else {
-                    frozenPlayer.getValue().setSeconds(frozenPlayer.getValue().getSeconds() - 1);
-                }
-            }
-
-            if (!unluckyPlayers.isEmpty()) {
-                Player killVictim;
-                for (UUID playerUuid : unluckyPlayers) {
-                    killVictim = Bukkit.getPlayer(playerUuid);
-                    if (freezeKill.getServer().getOnlinePlayers().contains(killVictim)) {
-                        killVictim.setHealth(0);
+                for (Map.Entry<UUID, Timer> frozenPlayer : currentFrozenPlayers.entrySet()) {
+                    if (frozenPlayer.getValue().getSeconds() == 0) {
+                        unluckyPlayers.add(frozenPlayer.getKey());
+                    } else {
+                        frozenPlayer.getValue().setSeconds(frozenPlayer.getValue().getSeconds() - 1);
                     }
-                    playerListener.removeFrozenPlayer(playerUuid);
                 }
-            }
 
-            if (playerListener.getFrozenPlayers().isEmpty()) {
-                removeScoreboards();
-                this.cancel();
+                if (!unluckyPlayers.isEmpty()) {
+                    Player killVictim;
+                    for (UUID playerUuid : unluckyPlayers) {
+                        killVictim = Bukkit.getPlayer(playerUuid);
+                        if (freezeKill.getServer().getOnlinePlayers().contains(killVictim)) {
+                            killVictim.setHealth(0);
+                        }
+                        playerListener.removeFrozenPlayer(playerUuid);
+                    }
+                }
+
+                if (playerListener.getFrozenPlayers() == null || playerListener.getFrozenPlayers().size() == 0) {
+                    removeScoreboards();
+                    this.cancel();
+                    this.setCancelled(true);
+                    Bukkit.getServer().getScheduler().cancelTask(taskId);
+                } else {
+                    updateScoreboards();
+                }
             } else {
-                updateScoreboards();
+                //if the player listener isn't set then just cancel the task
+                this.cancel();
+                this.setCancelled(true);
             }
-        } else {
-            //if the player listener isn't set then just cancel the task
-            this.cancel();
         }
     }
 
@@ -71,7 +79,11 @@ public class KillCheckTask extends BukkitRunnable {
                 newScoreBoard = newFrozenPlayer.getScoreboard();
             }
 
-            Objective timeLimitBoard = newScoreBoard.registerNewObjective("timeLimit", "dummy");
+            Objective timeLimitBoard = newScoreBoard.getObjective("timeLimit");
+
+            if (timeLimitBoard == null) {
+                timeLimitBoard = newScoreBoard.registerNewObjective("timeLimit", "dummy");
+            }
             timeLimitBoard.setDisplaySlot(DisplaySlot.SIDEBAR);
             timeLimitBoard.setDisplayName("Time Limit");
             newFrozenPlayer.setScoreboard(newScoreBoard);
@@ -80,6 +92,20 @@ public class KillCheckTask extends BukkitRunnable {
 
     public void removeFrozenPlayer(UUID playerUuid) {
         playerListener.removeFrozenPlayer(playerUuid);
+        updateScoreboards();
+    }
+
+    public Map<UUID, Timer> getFrozenPlayers() {
+        if (playerListener != null) {
+            return playerListener.getFrozenPlayers();
+        }
+
+        return new HashMap<UUID, Timer>();
+    }
+
+    @Override
+    public int getTaskId() {
+        return taskId;
     }
 
     private void updateScoreboards() {
@@ -89,10 +115,12 @@ public class KillCheckTask extends BukkitRunnable {
         Objective objective;
         for (Map.Entry<UUID, Timer> frozenPlayer : playerListener.getFrozenPlayers().entrySet()) {
             currentFrozenPlayer = Bukkit.getPlayer(frozenPlayer.getKey());
-            playerScoreboard = currentFrozenPlayer.getScoreboard();
-            objective = playerScoreboard.getObjective("timeLimit");
-            score = objective.getScore(currentFrozenPlayer.getName());
-            score.setScore(frozenPlayer.getValue().getSeconds());
+            if (Bukkit.getOnlinePlayers().contains(currentFrozenPlayer)) {
+                playerScoreboard = currentFrozenPlayer.getScoreboard();
+                objective = playerScoreboard.getObjective("timeLimit");
+                score = objective.getScore(currentFrozenPlayer.getName());
+                score.setScore(frozenPlayer.getValue().getSeconds());
+            }
         }
     }
 
@@ -100,5 +128,13 @@ public class KillCheckTask extends BukkitRunnable {
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
             onlinePlayer.setScoreboard(Bukkit.getScoreboardManager().getNewScoreboard());
         }
+    }
+
+    public boolean isCancelled() {
+        return cancelled;
+    }
+
+    private void setCancelled(boolean cancelled) {
+        this.cancelled = cancelled;
     }
 }

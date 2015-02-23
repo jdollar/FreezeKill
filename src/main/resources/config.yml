@@ -1,0 +1,10 @@
+#default freezekill config.yml
+hostileMobSettings:
+  doMobAttackWhenFrozen: true
+  areaAroundPlayer:
+    x:
+      - 50
+    y:
+      - 50
+    z:
+      - 50
